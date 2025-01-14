@@ -1,0 +1,27 @@
+{
+    "$schema": "https://turbo.build/schema.json",
+    "tasks": {
+        "check-types": {
+            "dependsOn": ["build"]
+        },
+        "@ai16z/agent#check-types": {
+            "dependsOn": [
+                "@ai16z/plugin-direct#build"
+            ]
+        },
+        "@ai16z/client-direct#build": {
+            "outputs": ["dist/**"],
+            "dependsOn": [
+                "@sqrdao/plugin-github#build",
+                "@sqrdao/plugin-calendar#build"
+            ]
+        },
+        "build": {
+            "outputs": ["dist/**"]
+        },
+        "dev": {
+            "persistent": true,
+            "cache": false
+        }
+    }
+}

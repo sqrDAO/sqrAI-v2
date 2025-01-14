@@ -1,0 +1,17 @@
+FROM postgres:16
+
+RUN apt update && \
+    apt install -y build-essential postgresql-server-dev-16 && \
+    apt install -y git && \
+    git clone https://github.com/pgvector/pgvector.git && \
+    cd pgvector && \
+    make && \
+    make install && \
+    cd .. && \
+    rm -rf pgvector && \
+    apt remove --purge -y build-essential postgresql-server-dev-16 && \
+    apt autoremove -y && \
+    apt clean
+
+# Add the extension to the PostgreSQL configuration
+RUN echo "shared_preload_libraries = 'pgvector'" >> /usr/share/postgresql/postgresql.conf.sample

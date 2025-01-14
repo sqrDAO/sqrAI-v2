@@ -1,0 +1,28 @@
+{
+    "name": "@sqrdao/twitter-client",
+    "version": "0.0.1",
+    "main": "dist/index.js",
+    "type": "module",
+    "types": "dist/index.d.ts",
+    "dependencies": {
+        "@elizaos/core": "^0.1.8",
+        "@types/pg": "8.11.10",
+        "pg": "8.13.1",
+        "simple-git": "3.27.0",
+        "tsup": "8.3.5",
+        "twitter-api-v2": "^1.19.0"
+    },
+    "devDependencies": {
+        "eslint": "9.13.0",
+        "eslint-config-prettier": "9.1.0",
+        "eslint-plugin-prettier": "5.2.1",
+        "eslint-plugin-vitest": "0.5.4",
+        "typescript": "^5.7.2"
+    },
+    "scripts": {
+        "test": "echo \"Error: no test specified\" && exit 1",
+        "build": "tsup --format esm --dts",
+        "dev": "tsup --watch",
+        "lint": "eslint . --fix"
+    }
+}
