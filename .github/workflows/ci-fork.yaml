@@ -4,7 +4,6 @@ on:
     branches:
       - dev
       - main
-      - features
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
@@ -44,9 +43,8 @@ jobs:
           echo REPO_MANIFEST_NAME=gitops >> $GITHUB_ENV
           echo REPO_MANIFEST_URL=github.com/sqrdao/gitops.git >> $GITHUB_ENV
           echo REPO_MANIFEST_BRANCH=main >> $GITHUB_ENV
-          echo REPO_MANIFEST_ENV_DEV=./k8s-dev/sqrai >> $GITHUB_ENV
-          echo REPO_MANIFEST_ENV_MAIN=./k8s-prod/sqrai >> $GITHUB_ENV
-          echo REPO_MANIFEST_ENV_FEAT=./k8s-feat/sqrai >> $GITHUB_ENV
+          echo REPO_MANIFEST_ENV_DEV=./k8s-feat/sqrai >> $GITHUB_ENV
+          echo REPO_MANIFEST_ENV_MAIN=./k8s-dev/sqrai >> $GITHUB_ENV
           echo REPO_MANIFEST_TAG_IMAGE=image_sqrai >> $GITHUB_ENV
       - name: Update manifest
         env:

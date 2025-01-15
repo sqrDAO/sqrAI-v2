@@ -14,10 +14,6 @@ elif [ ${GITHUB_REF_NAME} = "dev" ]
 then
   echo 'This is dev branch'
   cd ${REPO_MANIFEST_ENV_DEV}
-elif [ ${GITHUB_REF_NAME} = "features" ]
-then
-  echo 'This is feat branch'
-  cd ${REPO_MANIFEST_ENV_FEAT}
 else
   exit
 fi
