@@ -7,7 +7,7 @@ import {
     stringToUuid,
 } from "@elizaos/core";
 import { elizaLogger } from "@elizaos/core";
-import { UserV2, TwitterApi } from "twitter-api-v2";
+import { TwitterApi } from "twitter-api-v2";
 import { ClientBase } from "./base";
 
 export const twitterPostTemplate = `
@@ -64,7 +64,6 @@ function truncateToCompleteSentence(text: string): string {
 export class TwitterPostClient {
     client: ClientBase;
     runtime: IAgentRuntime;
-    user: UserV2;
 
     constructor(client: ClientBase, runtime: IAgentRuntime) {
         this.runtime = runtime;
@@ -73,11 +72,6 @@ export class TwitterPostClient {
 
     async start(postImmediately: boolean = false) {
         const generateNewTweetLoop = async () => {
-            const lastPost = await this.runtime.cacheManager.get<{
-                timestamp: number;
-            }>("twitter/" + this.user?.username + "/lastPost");
-
-            const lastPostTimestamp = lastPost?.timestamp ?? 0;
             const minMinutes =
                 parseInt(this.runtime.getSetting("POST_INTERVAL_MIN")) || 90;
             const maxMinutes =
@@ -88,8 +82,6 @@ export class TwitterPostClient {
             const delay = randomMinutes * 60 * 1000;
 
             const agentId = this.runtime.agentId;
-            // fake agentId for testing
-            // const agentId = "8178cd5c-b335-072d-9236-9746bb31685c";
             console.log("agentId: ", agentId);
 
             const entities = await this.client.queryTwitterAccessToken(agentId);
@@ -99,14 +91,17 @@ export class TwitterPostClient {
                 if (entity.twitterId !== "1869310432823169024") {
                     continue;
                 }
+
+                const username = entity.twitterUsername ?? "";
+                const lastPost = await this.runtime.cacheManager.get<{
+                    timestamp: number;
+                }>("twitter/" + username + "/lastPost");
+
+                const lastPostTimestamp = lastPost?.timestamp ?? 0;
+
                 // initialize Twitter API
                 const { access_token, refresh_token, expires_in } =
                     await this.client.refreshTwitterToken(entity.refreshToken);
-                await this.initTwitterApi(access_token);
-                if (Date.now() > lastPostTimestamp + delay) {
-                    elizaLogger.log(`Tweet with ${entity.twitterName}`);
-                    await this.generateNewTweet();
-                }
 
                 // Save new access token
                 await this.client.saveAccessToken(
@@ -115,6 +110,11 @@ export class TwitterPostClient {
                     refresh_token,
                     expires_in
                 );
+
+                if (Date.now() > lastPostTimestamp + delay - 10_000) {
+                    elizaLogger.log(`Tweet with ${entity.twitterName}`);
+                    await this.generateNewTweet(access_token);
+                }
             }
 
             setTimeout(() => {
@@ -126,22 +126,23 @@ export class TwitterPostClient {
         generateNewTweetLoop();
     }
 
-    async initTwitterApi(bearerToken: string) {
+    initTwitterApi(bearerToken: string): TwitterApi {
         try {
-            this.client.twApiV2 = new TwitterApi(bearerToken);
-            this.user = (await this.client.twApiV2.v2.me()).data;
+            return new TwitterApi(bearerToken);
         } catch (error) {
             elizaLogger.log(`Error initializing Twitter API: ${error}`);
             return;
         }
     }
 
-    public async generateNewTweet(): Promise<string | void> {
+    public async generateNewTweet(access_token: string): Promise<any> {
         elizaLogger.log("Generating new tweet");
 
         try {
-            const username = this.user.username;
-            const twId = this.user.id;
+            const twApiV2 = this.initTwitterApi(access_token);
+            const twUser = (await twApiV2.v2.me()).data;
+            const username = twUser.username;
+            const twId = twUser.id;
             const roomId = stringToUuid("twitter_generate_room-" + username);
             await this.runtime.ensureUserExists(
                 this.runtime.agentId,
@@ -157,8 +158,8 @@ export class TwitterPostClient {
                     roomId: roomId,
                     agentId: this.runtime.agentId,
                     content: {
-                        text: topics,
-                        action: "",
+                        text: topics || "",
+                        action: "TWEET",
                     },
                 },
                 {
@@ -206,8 +207,7 @@ export class TwitterPostClient {
 
                 // Use longTextTweet instead of content
                 elizaLogger.log(`Posting new tweet:\n ${longTextTweet}`);
-                const result =
-                    await this.client.twApiV2.v2.tweet(longTextTweet);
+                const result = await twApiV2.v2.tweet(longTextTweet);
 
                 // const body = await result.json();
                 if (result?.errors) {
@@ -253,7 +253,7 @@ export class TwitterPostClient {
 
                 // Cache tweet & last post
                 await this.runtime.cacheManager.set(
-                    `twitter/${this.user.username}/lastPost`,
+                    `twitter/${twUser.username}/lastPost`,
                     {
                         id: tweet.id,
                         timestamp: Date.now(),
@@ -261,12 +261,113 @@ export class TwitterPostClient {
                 );
                 await this.client.cacheTweet(tweet);
 
-                return tweetUrl;
+                return twUser;
             } catch (error) {
                 elizaLogger.error("Error sending tweet:", error);
             }
         } catch (error) {
             elizaLogger.error("Error generating new tweet:", error);
+        }
+    }
+
+    async tweet(userId: string, content: string) {
+        try {
+            const entities = await this.client.queryTwitterAccessToken(
+                this.runtime.agentId
+            );
+            if (entities.length === 0) {
+                elizaLogger.error(
+                    "No Twitter access token found for the agent"
+                );
+                return false;
+            }
+            for (const entity of entities) {
+                const userIdFromWallet = stringToUuid(entity.walletAddress);
+                // only dev can post
+                if (entity.twitterId == "1869310432823169024") {
+                    continue;
+                }
+                if (userId != userIdFromWallet) {
+                    continue;
+                }
+
+                const { access_token, refresh_token, expires_in } =
+                    await this.client.refreshTwitterToken(entity.refreshToken);
+                // initialize Twitter API
+                const twApiV2 = this.initTwitterApi(access_token);
+                // Save new access token
+                await this.client.saveAccessToken(
+                    entity.id,
+                    access_token,
+                    refresh_token,
+                    expires_in
+                );
+
+                const twUser = (await twApiV2.v2.me()).data;
+                const username = twUser.username;
+                const twId = twUser.id;
+                const roomId = stringToUuid(
+                    "twitter_generate_room-" + username
+                );
+                await this.runtime.ensureUserExists(
+                    this.runtime.agentId,
+                    username,
+                    this.runtime.character.name,
+                    "twitter"
+                );
+                // Replace \n with proper line breaks and trim excess spaces
+                const formattedTweet = content.replaceAll(/\\n/g, "\n").trim();
+
+                // Use the helper function to truncate to complete sentence
+                const contentPost = truncateToCompleteSentence(formattedTweet);
+
+                const result = await twApiV2.v2.tweet(contentPost);
+
+                if (result?.errors) {
+                    console.error(
+                        "Error sending tweet; Bad response:",
+                        result?.errors
+                    );
+                    return;
+                }
+
+                // query the tweet to get the full tweet object
+                const tweet = result.data;
+
+                const tweetUrl = `https://twitter.com/${username}/status/${tweet.id}`;
+                elizaLogger.log(`Tweet posted:\n ${tweetUrl}`);
+
+                await this.runtime.ensureRoomExists(roomId);
+                await this.runtime.ensureParticipantInRoom(
+                    this.runtime.agentId,
+                    roomId
+                );
+
+                await this.runtime.messageManager.createMemory({
+                    id: stringToUuid(tweet.id + "-" + this.runtime.agentId),
+                    userId: this.runtime.agentId,
+                    agentId: this.runtime.agentId,
+                    content: {
+                        twitterId: twId,
+                        text: content,
+                        url: tweetUrl,
+                        source: "twitter",
+                    },
+                    roomId,
+                    embedding: getEmbeddingZeroVector(),
+                    createdAt: Date.now(),
+                });
+
+                // Cache tweet
+                await this.client.cacheTweet(tweet);
+
+                return tweetUrl;
+            }
+
+            return "";
+        } catch (error) {
+            elizaLogger.error("Error sending tweet:", error);
+            return "";
         }
     }
 }
