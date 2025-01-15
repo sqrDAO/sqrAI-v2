@@ -40,16 +40,16 @@ RUN npm install -g pnpm@9.4.0 && \
 
 WORKDIR /app
 
-COPY --from=builder . .
-# Copy built artifacts and production dependencies from the builder stage
-# COPY --from=builder /app/package.json ./
-# COPY --from=builder /app/pnpm-workspace.yaml ./
-# COPY --from=builder /app/.npmrc ./
-# COPY --from=builder /app/turbo.json ./
-# COPY --from=builder /app/node_modules ./node_modules
-# COPY --from=builder /app/agent ./agent
-# COPY --from=builder /app/packages ./packages
-# COPY --from=builder /app/scripts ./scripts
+#Copy built artifacts and production dependencies from the builder stage
+COPY --from=builder /app/package.json ./
+COPY --from=builder /app/pnpm-workspace.yaml ./
+COPY --from=builder /app/.npmrc ./
+COPY --from=builder /app/turbo.json ./
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/agent ./agent
+COPY --from=builder /app/packages ./packages
+COPY --from=builder /app/scripts ./scripts
+COPY --from=builder /app/dist ./dist
 # COPY --from=builder /app/characters ./characters
 
 # Set the command to run the application
