@@ -21,7 +21,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc turbo.json ./
 COPY agent ./agent
 COPY packages ./packages
 COPY scripts ./scripts
-COPY characters ./characters
+# COPY characters ./characters
 
 # Install dependencies and build the project
 RUN pnpm install \
