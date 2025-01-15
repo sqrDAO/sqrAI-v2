@@ -36,12 +36,13 @@ export class BullService extends Service {
                     roomId: `self-message-${job.data.agentId}`,
                     text: job.data.text,
                     userId: job.data.agentId,
+                    event: job.data.event,
                 });
                 console.log(
                     `Self sending message to agent ${job.data.agentId}`
                 );
                 await fetch(
-                    `http://localhost:3000/${job.data.agentId}/message`,
+                    `http://localhost:3000/${job.data.agentId}/action-message`,
                     {
                         method: "POST",
                         headers: {

@@ -1,4 +1,16 @@
-import { Action, composeContext, elizaLogger, generateText, HandlerCallback, IAgentRuntime, IBullMQService, Memory, parseJSONObjectFromText, ServiceType, State } from "@elizaos/core";
+import {
+    Action,
+    composeContext,
+    elizaLogger,
+    generateText,
+    HandlerCallback,
+    IAgentRuntime,
+    IBullMQService,
+    Memory,
+    parseJSONObjectFromText,
+    ServiceType,
+    State,
+} from "@elizaos/core";
 import { z } from "zod";
 import { v4 } from "uuid";
 import cronParser from "cron-parser";
@@ -24,7 +36,8 @@ const eventDetailsSchema = z.object({
 export const setCalendarAction: Action = {
     name: "SET_CALENDAR",
     similes: ["ADD_EVENT", "CREATE_EVENT", "SCHEDULE_ACTION"],
-    description: "Set a calendar event or schedule an action for the agent using cron scheduler.",
+    description:
+        "Set a calendar event or schedule an action for the agent using cron scheduler.",
     validate: async (runtime: IAgentRuntime, _message: Memory) => {
         elizaLogger.log("Validating set calendar request");
         elizaLogger.log("Message:", _message);
@@ -154,11 +167,13 @@ export const setCalendarAction: Action = {
                     text: `I will use the action ${event.action} with the following data: ${JSON.stringify(event)}`,
                     agentId: runtime.agentId,
                     data: event.data,
-                }, {
+                    event: event,
+                },
+                {
                     jobId: event.id,
-                    repeat: validation.data.cron ?
-                        { pattern: validation.data.cron } :
-                        undefined,
+                    repeat: validation.data.cron
+                        ? { pattern: validation.data.cron }
+                        : undefined,
                     delay: !validation.data.cron
                         ? validation.data.scheduledAt.getTime() - Date.now()
                         : undefined,
@@ -166,12 +181,14 @@ export const setCalendarAction: Action = {
                     removeOnFail: {
                         age: 60 * 60 * 24,
                     },
-                });
+                }
+            );
         }
 
         if (callback) {
             callback({
-                text: validation.data.message ||
+                text:
+                    validation.data.message ||
                     `Understood. I will ${validation.data.name} at ${validation.data.scheduledAt}.`,
             });
         }

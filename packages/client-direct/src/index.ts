@@ -294,6 +294,102 @@ export class DirectClient {
         );
 
         this.app.post(
+            "/:agentId/action-message",
+            async (req: express.Request, res: express.Response) => {
+                const agentId = req.params.agentId;
+                const roomId = stringToUuid(
+                    req.body.roomId ?? "default-room-" + agentId
+                );
+                const userId = stringToUuid(req.body.userId ?? "user");
+
+                let runtime = this.agents.get(agentId);
+
+                // if runtime is null, look for runtime with the same name
+                if (!runtime) {
+                    runtime = Array.from(this.agents.values()).find(
+                        (a) =>
+                            a.character.name.toLowerCase() ===
+                            agentId.toLowerCase()
+                    );
+                }
+
+                if (!runtime) {
+                    res.status(404).send("Agent not found");
+                    return;
+                }
+
+                await runtime.ensureConnection(
+                    userId,
+                    roomId,
+                    req.body.userName,
+                    req.body.name,
+                    "direct"
+                );
+
+                const text = req.body.text;
+                const messageId = stringToUuid(Date.now().toString());
+
+                const content: Content = {
+                    text,
+                    attachments: [],
+                    source: "direct",
+                    inReplyTo: undefined,
+                };
+
+                const memory: Memory = {
+                    id: messageId,
+                    agentId: runtime.agentId,
+                    userId,
+                    roomId,
+                    content,
+                    createdAt: Date.now(),
+                };
+
+                await runtime.messageManager.createMemory(memory);
+                const userMessage = {
+                    content,
+                    userId,
+                    roomId,
+                    agentId: runtime.agentId,
+                };
+                const state = await runtime.composeState(userMessage, {
+                    agentName: runtime.character.name,
+                });
+
+                const response = "I'm calling action for you";
+                let message = null as Content | null;
+
+                // call handle action
+                memory.content.action = req.body.event.action;
+                await runtime.processActions(
+                    memory,
+                    [memory],
+                    state,
+                    async (newMessages) => {
+                        message = newMessages;
+                        return [memory];
+                    }
+                );
+
+                if (message) {
+                    message.user = this.agents.get(agentId)!.character.name;
+                    await runtime.messageManager.createMemory({
+                        id: stringToUuid(roomId + Date.now().toString()),
+                        agentId: runtime.agentId,
+                        userId: runtime.agentId,
+                        roomId,
+                        content: message,
+                        createdAt: Date.now(),
+                    });
+
+                    res.json([response, message]);
+                } else {
+                    res.json([response]);
+                }
+            }
+        );
+
+        this.app.post(
             "/:agentId/image",
             async (req: express.Request, res: express.Response) => {
                 const agentId = req.params.agentId;
