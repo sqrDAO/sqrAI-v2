@@ -1,4 +1,5 @@
-import { tweetAction } from "./actions/tweet.ts";
+import { generateTweetAction } from "./actions/generate.ts";
+import { postAction } from "./actions/post.ts";
 import { ClientBase } from "./base.ts";
 import { TwitterPostClient } from "./post.ts";
 import { IAgentRuntime, Client, elizaLogger, Plugin } from "@elizaos/core";
@@ -26,7 +27,7 @@ export const TwitterClientInterfaceV2: Client = {
 };
 
 export const twitterPlugin: Plugin = {
-    actions: [tweetAction],
+    actions: [postAction, generateTweetAction],
     name: "twitter",
     description: "Twitter Client Plugin",
 };

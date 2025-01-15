@@ -1,10 +1,8 @@
-import { TwitterApi } from "twitter-api-v2";
 import { IAgentRuntime } from "@elizaos/core";
 import { EventEmitter } from "events";
 import pg from "pg";
 export class ClientBase extends EventEmitter {
     runtime: IAgentRuntime;
-    twApiV2: TwitterApi;
     pool: pg.Pool;
     constructor(runtime: IAgentRuntime) {
         super();
