@@ -94,13 +94,7 @@ export class ClientBase extends EventEmitter {
             }
 
             const data = await response.json();
-            console.log("Token refreshed successfully:", data);
-
-            // Extract the new tokens and expiration time
-            const { access_token, refresh_token, expires_in } = data;
-            console.log("New Access Token:", access_token);
-            console.log("New Refresh Token:", refresh_token);
-            console.log("Expires In (seconds):", expires_in);
+            console.log("Token refreshed successfully!");
 
             return data;
         } catch (error) {
@@ -120,6 +114,7 @@ export class ClientBase extends EventEmitter {
                 'UPDATE twitter_client SET "accessToken" = $1, "refreshToken" = $2, "expiredAt" = $3 WHERE id = $4;',
                 [access_token, refresh_token, expiration, id]
             );
+            console.log("Access token saved successfully!");
         } catch (error) {
             console.error("Error saving access token:", error);
         }
