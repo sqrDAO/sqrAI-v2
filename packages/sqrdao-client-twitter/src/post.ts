@@ -98,6 +98,7 @@ export class TwitterPostClient {
                 }>("twitter/" + username + "/lastPost");
 
                 const lastPostTimestamp = lastPost?.timestamp ?? 0;
+                console.log(`lastPostTimestamp: ${lastPostTimestamp}`);
 
                 // initialize Twitter API
                 const { access_token, refresh_token, expires_in } =
@@ -111,7 +112,9 @@ export class TwitterPostClient {
                     expires_in
                 );
 
-                if (Date.now() > lastPostTimestamp + delay - 10_000) {
+                console.log(`Time to check: ${Date.now()}`);
+
+                if (Date.now() > lastPostTimestamp + delay - 60_000) {
                     elizaLogger.log(`Tweet with ${entity.twitterName}`);
                     await this.generateNewTweet(access_token);
                 }
@@ -209,7 +212,6 @@ export class TwitterPostClient {
                 elizaLogger.log(`Posting new tweet:\n ${longTextTweet}`);
                 const result = await twApiV2.v2.tweet(longTextTweet);
 
-                // const body = await result.json();
                 if (result?.errors) {
                     console.error(
                         "Error sending tweet; Bad response:",
@@ -259,9 +261,9 @@ export class TwitterPostClient {
                         timestamp: Date.now(),
                     }
                 );
-                await this.client.cacheTweet(tweet);
+                console.log(`Time to cache last post: ${Date.now()}`);
 
-                return twUser;
+                await this.client.cacheTweet(tweet);
             } catch (error) {
                 elizaLogger.error("Error sending tweet:", error);
             }
