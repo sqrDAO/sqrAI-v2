@@ -98,7 +98,6 @@ export class TwitterPostClient {
                 }>("twitter/" + username + "/lastPost");
 
                 const lastPostTimestamp = lastPost?.timestamp ?? 0;
-                console.log(`lastPostTimestamp: ${lastPostTimestamp}`);
 
                 // initialize Twitter API
                 const { access_token, refresh_token, expires_in } =
@@ -112,9 +111,12 @@ export class TwitterPostClient {
                     expires_in
                 );
 
+                console.log(`lastPostTimestamp: ${lastPostTimestamp}`);
                 console.log(`Time to check: ${Date.now()}`);
+                const timeCheck = lastPostTimestamp + delay - 60_000;
+                console.log(`timeCheck: ${timeCheck}`);
 
-                if (Date.now() > lastPostTimestamp + delay - 60_000) {
+                if (Date.now() > timeCheck) {
                     elizaLogger.log(`Tweet with ${entity.twitterName}`);
                     await this.generateNewTweet(access_token);
                 }
