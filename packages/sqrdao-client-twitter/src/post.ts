@@ -209,10 +209,17 @@ export class TwitterPostClient {
                 let index = projects.rows[0].index;
                 const data = projects.rows[0].data;
                 const longTextTweet = data.projects[index].Text;
+                const replyTo = data.projects[index].ReplyTo;
 
                 // Use longTextTweet instead of content
                 elizaLogger.log(`Posting new tweet:\n ${longTextTweet}`);
-                const result = await twApiV2.v2.tweet(longTextTweet);
+                let result: any;
+                if (replyTo) {
+                    elizaLogger.log(`Replying to:\n ${replyTo}`);
+                    result = await twApiV2.v2.tweet(longTextTweet, {
+                        reply: { in_reply_to_tweet_id: replyTo },
+                    });
+                } else result = await twApiV2.v2.tweet(longTextTweet);
 
                 if (result?.errors) {
                     console.error(
