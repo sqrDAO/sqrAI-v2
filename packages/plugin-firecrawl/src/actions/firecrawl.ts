@@ -1,11 +1,14 @@
 import {
     Action,
+    AgentRuntime,
     elizaLogger,
     embed,
     generateText,
     HandlerCallback,
     IAgentRuntime,
     IBullMQService,
+    knowledge,
+    KnowledgeItem,
     Memory,
     ServiceType,
     State,
@@ -16,10 +19,113 @@ import { Firecrawl } from "../services/firecrawl";
 import { BullService } from "@sqrdao/plugin-bullmq";
 import { Job, Worker } from "bullmq";
 import { CrawlStatusResponse } from "@mendable/firecrawl-js";
-export const firecrawlAction: Action = {
-    name: "FIRE_CRAWL",
+
+const agentById: Record<string, IAgentRuntime> = {};
+
+const worker = new Worker(
+    "firecrawl",
+    async (job: Job) => {
+        const website = job.data.website;
+        const roomId = job.data.roomId;
+        const agentName = job.data.agentName;
+        const firecrawlApp = Firecrawl.getInstance();
+        const runtime = agentById[job.data.agentId];
+
+        if (!job.data.firecrawlId) {
+            const response = await firecrawlApp.asyncCrawlUrl(website, {
+                limit: 1,
+                scrapeOptions: {
+                    formats: ["markdown", "html", "links"],
+                    onlyMainContent: true,
+                },
+            });
+
+            if (response.success === false) {
+                throw Error("Crawl failed");
+            }
+
+            await job.updateData({
+                ...job.data,
+                firecrawlId: response.id,
+            });
+        }
+
+        const id = job.data.firecrawlId;
+        if (!id) throw new Error("Firecrawl ID not ready");
+
+        elizaLogger.log("check status with crawl ID: ", id);
+        const currentStatus = await firecrawlApp.checkCrawlStatus(id);
+        elizaLogger.log("Crawl status: ", currentStatus);
+        if (currentStatus.success) {
+            if (currentStatus.status === "scraping") {
+                throw new Error("Crawl is still in progress");
+            }
+            elizaLogger.log("Crawl completed successfully");
+
+            const responseSummarizing = await summaryWebsiteContent(
+                runtime,
+                currentStatus
+            );
+            let knowledgeItem: KnowledgeItem = null;
+            if (process.env.FIRECRAWL_SAVE_KNOWLEDGE_MODE === "summary") {
+                knowledgeItem = {
+                    id,
+                    content: {
+                        text: `Summary of the website ${website}: ${responseSummarizing}`,
+                    },
+                };
+            } else {
+                knowledgeItem = {
+                    id,
+                    content: {
+                        text: `Source markdown of website ${website}:
+    ${currentStatus.data[0].markdown}
+    Metadata of website ${website}:
+    ${currentStatus.data[0].metadata}
+    Summary of the website ${website}:
+    ${responseSummarizing}`,
+                        source: website,
+                    },
+                };
+            }
+
+            // create knowledge
+            if (knowledgeItem) {
+                await knowledge.set(runtime as AgentRuntime, knowledgeItem);
+            }
+
+            // create an message to tell user job completed
+            await runtime.messageManager.createMemory({
+                agentId: runtime.agentId,
+                userId: runtime.agentId,
+                roomId: roomId,
+                content: {
+                    text: `Crawl website ${website} done, now you can summarize it`,
+                    user: agentName,
+                },
+            });
+        } else {
+            throw new Error("Crawl failed");
+        }
+    },
+    {
+        ...BullService.getInstance<IBullMQService>().getQueueOptions(),
+        autorun: false,
+    }
+);
+
+worker.on("completed", (job: Job) => {
+    elizaLogger.log(`Job ${job.id} completed`);
+});
+
+worker.on("failed", (job: Job, error: Error) => {
+    elizaLogger.error(`Job ${job.id} failed with error: ${error.message}`);
+});
+
+export const crawlWebAction: Action = {
+    name: "CRAWL_WEB",
     similes: ["crawl website", "scrape web", "fetch web"],
-    description: "Crawl a website",
+    description: "Crawl a website, only support 1 website",
     validate: async (runtime: IAgentRuntime, _message: Memory) => {
         return true;
     },
@@ -30,25 +136,20 @@ export const firecrawlAction: Action = {
         _options: any,
         callback: HandlerCallback
     ) => {
+        agentById[runtime.agentId] = runtime;
+        if (worker.isRunning() === false) {
+            worker.run();
+        }
+
+        elizaLogger.log("curent content: ", message.content.text);
         const urls = extractUrls(message.content.text);
+        elizaLogger.log("urls after extract: ", urls);
         if (urls.length === 0) {
             elizaLogger.error("No URLs found in the message");
             await callback({ text: "No URLs found in the message" });
             return;
         }
         elizaLogger.log("URLs found in the message: ", urls);
-        const firecrawlApp = Firecrawl.getInstance();
-        const id = await firecrawlApp.asyncCrawlUrl(urls[0], {
-            limit: 1,
-            scrapeOptions: {
-                formats: ["markdown", "html", "links"],
-                onlyMainContent: true,
-            },
-        });
-        if (id.success === false) {
-            await callback({ text: "Crawl failed" });
-            return;
-        }
 
         const bullService = runtime.getService<IBullMQService>(
             ServiceType.BULL_MQ
@@ -58,34 +159,16 @@ export const firecrawlAction: Action = {
         }
         await bullService.createQueue("firecrawl");
 
-        const memory: Memory = {
-            id: id.id as UUID,
-            userId: message.userId,
-            agentId: runtime.agentId,
-            roomId: message.roomId,
-            content: {
-                text: "",
-                firecrawlId: id.id,
-                website: urls[0],
-            },
-            embedding: null,
-        };
-        const existing = await runtime.documentsManager.getMemoryById(
-            memory.id
-        );
-        if (existing) {
-            elizaLogger.log(
-                `Already processed message ${message.id}, skipping`
-            );
-            return;
-        }
-
+        const idWeb = stringToUuid(urls[0]);
         await bullService.createJob(
             "firecrawl",
-            `firecrawl-${id.id}`,
+            idWeb,
             {
-                id: id.id,
+                id: idWeb,
                 website: urls[0],
+                roomId: message.roomId,
+                agentName: _state.agentName,
+                agentId: _state.agentId,
             },
             {
                 removeOnComplete: false,
@@ -95,83 +178,10 @@ export const firecrawlAction: Action = {
             }
         );
 
-        const worker = new Worker(
-            "firecrawl",
-            async (job: Job) => {
-                const firecrawlApp = Firecrawl.getInstance();
-                const id = job.data.id;
-                const website = job.data.website;
-                elizaLogger.log("check status with crawl ID: ", id);
-                const currentStatus = await firecrawlApp.checkCrawlStatus(id);
-                elizaLogger.log("Crawl status: ", currentStatus);
-                if (currentStatus.success) {
-                    if (currentStatus.status === "scraping") {
-                        throw new Error("Crawl is still in progress");
-                    }
-                    elizaLogger.log("Crawl completed successfully");
-
-                    // create document after crawl success
-                    await runtime.documentsManager.createMemory({
-                        ...memory,
-                        content: {
-                            text: (currentStatus as CrawlStatusResponse).data[0]
-                                .markdown,
-                        },
-                    });
-
-                    const responseSummarizing = await summaryWebsiteContent(
-                        runtime,
-                        currentStatus
-                    );
-
-                    // create knowledge
-                    memory.content.text = JSON.stringify({
-                        firecrawlId: id,
-                        website: website,
-                        summary: responseSummarizing,
-                        crawledAt: new Date(),
-                    });
-                    memory.content.source = memory.id;
-                    const embedRes = await embed(runtime, memory.content.text);
-                    memory.embedding = embedRes;
-                    await runtime.knowledgeManager.createMemory({
-                        ...memory,
-                        id: stringToUuid(memory.id + "summary"),
-                        embedding: embedRes,
-                    });
-
-                    // create an message to tell user job completed
-                    await runtime.messageManager.createMemory({
-                        agentId: runtime.agentId as UUID,
-                        userId: runtime.agentId as UUID,
-                        roomId: message.roomId as UUID,
-                        content: {
-                            text: `Crawl website ${website} done, now you can summarize it`,
-                            user: _state.agentName,
-                        },
-                    });
-                } else {
-                    throw new Error("Crawl failed");
-                }
-            },
-            BullService.getInstance<IBullMQService>().getQueueOptions()
-        );
-
-        worker.on("completed", (job: Job) => {
-            elizaLogger.log(`Job ${job.id} completed`);
-        });
-
-        worker.on("failed", (job: Job, error: Error) => {
-            elizaLogger.error(
-                `Job ${job.id} failed with error: ${error.message}`
-            );
-        });
-
         // let responseCrawl: any;
         elizaLogger.log("Crawl initiated successfully");
-        elizaLogger.log("Crawl ID: ", id.id);
         return await callback({
-            text: `Crawl initiated successfully , id is ${id.id}`,
+            text: `Crawl ${urls[0]} initiated successfully. I will tell you when it done`,
         });
     },
     examples: [],
