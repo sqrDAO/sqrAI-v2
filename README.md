@@ -7,51 +7,53 @@ The SQRAI-V2 project is designed to provide a comprehensive suite of tools and u
 ## Packages
 
 ### `plugin-github`
-This package provides a set of actions for interacting with GitHub repositories. It includes functionalities for cloning repositories, generating documentation, summarizing repository contents, and creating pull requests. The actions are designed to be used within a GitHub Actions workflow or as standalone utilities.
+This package provides a set of actions for interacting with GitHub repositories. It includes functionalities for cloning repositories, generating documentation, summarizing repository contents, and creating pull requests. The actions are designed to be used within a GitHub Actions workflow or as standalone utilities. The provided actions are:
+- `CLONE_REPO`: clone a repository and save its information to the database. Cloned code is stored in the `agent/repos` directory and its content will be summarized and stored in agent memories.
+- `GENDOC`: generate documentation for a repository. The agent will try to generate documentation for a specific file or folder provided by the user.
+- `SUMMARIZE_REPO`: generate a summary of a repository.
+- `EXPLAIN_PROJECT`: answer questions about a project, it could be a summary of the project, how to use it, etc. The agent will try to answer the question by retrieving information from memory and reading relevant files in the repository.
+For now, it only supports public repositories. In the future, we plan to add support for private repositories.
 
 ### `client-direct`
-This package provides a client for handling direct HTTP requests and downloading files from external APIs. It includes methods for making GET and POST requests, handling authentication, and processing responses. This package is used by other plugins to interact with external services and APIs.
+This packgae is based on the client-direct package of Eliza. It provides additional functionalities as a API server for other plugins. Aside from the default endpoints, it also provides endpoints for retrieving past messages, delete knowledges of an agent, and allow other plugins to register their endpoints.
+New endpoints:
+- GET /:agentId/messages: retrieves past messages of the agent
+- DELETE /:agentId/knowledge: deletes all knowledge of the agent
+
+At the moment, to register plugins' endpoints, we need to manually add the endpoints to the client-direct package. In the future, we will provide a way for plugins to register their endpoints automatically from their own packages.
 
 ### `plugin-calendar`
-This package provides functionalities for managing and interacting with calendar events. It includes actions for creating, updating, and deleting calendar events, as well as retrieving event details. This package is useful for integrating calendar functionalities into your workflows.
+This plugin provides actions for managing tasks and events for an agent. It acts as an interface for a bull-mq queue to manage tasks and events. It includes 2 actions:
+- `SET_CALENDAR`: set a task for the agent. The task could be a simple reminder or a complex task that requires multiple actions to complete. It supports cron expression for recurring tasks.
+- `NOTIFY_EVENT`: a simple action that the agent can use to notify the user at a predefined time. Together with the `SET_CALENDAR` action, the user can request the agent to notify them at a specific time.
+
+It provides additional API endpoints to retrieve the agent's tasks and events. The endpoints are:
+- `GET /cals/events`: retrieves all events of the agent
+- `DELETE /cals/events/:eventId`: deletes a specific event of the agent (to be implemented)
+The endpoint is implemented in `plugin-calendar/src/api.ts` and registered in `client-direct/src/index.ts`.
+
+### `bull-mq`
+This package is the backend for the `plugin-calendar` package. It provides functionalities for handling background tasks and job processing. It includes actions for creating, processing, and managing jobs in a queue to ensure reliable job processing. In the future, it will be merged with the `plugin-calendar` package to provide a seamless experience for managing tasks and events. It requires `REDIS_URL` for bull-mq to work.
 
 ### `plugin-firecrawl`
-This package provides tools for crawling and indexing web content. It includes actions for fetching web pages, extracting relevant information, and storing the data in a structured format. This package is useful for building web crawlers and data extraction tools.
+This package provides integration with FireCrawl for web crawling and indexing. The main actions are:
+- `CRAWL_WEBSITE`: the agent will crawl a website specified by the user and extract relevant information. The information will be stored as knowledge in the agent's database for future actions.
+- `CHECK_STATUS`: allow agent check the status of the crawling process and respond to the user.
+The package depends on the `plugin-calender` package to manage the crawling process in the background.
+
+Note: This package requires a FIRECRAWL_API_KEY to work.
 
 ### `plugin-reason`
-This package provides functionalities for reasoning and decision-making. It includes actions for evaluating logical expressions, making decisions based on predefined rules, and generating explanations for the decisions. This package is useful for building intelligent systems that require reasoning capabilities.
+This plugin allows the agent to contruct a plan based on the user's request. It helps the agent to make complex course of actions that require executing multiple actions in a specific order. It includes the action `MAKE_PLAN` which will generate a plan based on the user's request by evaluating the agent's possible actions. We plan to expand this plugin to include more complex reasoning as well as make this the default action for the agent to improve decision-making.
 
 ### `sqrdao-client-twitter`
 This package provides a client for interacting with the Twitter API. It includes functionalities for posting tweets, retrieving user timelines, and searching for tweets. This package is useful for integrating Twitter functionalities into your workflows.
 
-### `bull-mq`
-This package provides a message queue system using BullMQ. It includes functionalities for creating, processing, and managing jobs in a queue. This package is useful for handling background tasks and ensuring reliable job processing.
-
 ## Usage Instructions
 
-### Cloning a Repository
-To clone a repository and save its information to the database, use the `cloneRepoAction` provided by the GitHub plugin.
+The project can be deployed as is to use all supported functionalities. It can be further extended the same way as Eliza by adding more plugins and actions. Plugins can also be used in other Eliza-based projects but may require some modifications to work properly.
 
-### Generating Documentation
-To generate documentation for a repository, use the `gendocAction` provided by the GitHub plugin. Specify the repository and folder path for which you want to generate documentation.
+## Development
 
-### Summarizing a Repository
-To generate a summary of a repository, use the `summarizeRepoAction` provided by the GitHub plugin. This action will extract information about programming languages, frameworks, documentation files, and other important files.
-
-### Creating a Pull Request
-To create a pull request, use the `createPRAction` provided by the GitHub plugin. This action will generate a new branch name, commit message, title, and description for the pull request.
-
-### Managing Calendar Events
-To manage calendar events, use the actions provided by the `plugin-calendar`. You can create, update, delete, and retrieve calendar events using the respective actions.
-
-### Crawling Web Content
-To crawl and index web content, use the actions provided by the `plugin-firecrawl`. You can fetch web pages, extract relevant information, and store the data in a structured format.
-
-### Reasoning and Decision-Making
-To perform reasoning and decision-making, use the actions provided by the `plugin-reason`. You can evaluate logical expressions, make decisions based on predefined rules, and generate explanations for the decisions.
-
-### Interacting with Twitter
-To interact with the Twitter API, use the functionalities provided by the `sqrdao-client-twitter`. You can post tweets, retrieve user timelines, and search for tweets using the respective methods.
-
-### Using BullMQ
-To handle background tasks and job processing, use the functionalities provided by the `bull-mq` package. You can create, process, and manage jobs in a queue to ensure reliable job processing.
+The project is based on Eliza@0.1.7 and uses the same structure for plugins and actions. Each plugin is a separate package that can be developed and tested independently. Refer to [Eliza documentation](https://elizaos.github.io/eliza/) for more information on how to develop plugins and actions.
+We will regularly update the Eliza version to catchup with the latest changes and improvements.
