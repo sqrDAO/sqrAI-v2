@@ -88,7 +88,7 @@ export class TwitterPostClient {
 
             for (const entity of entities) {
                 // stop post
-                if (entity.twitterId !== "0000") {
+                if (entity.twitterId !== "1869665627407106048") {
                     continue;
                 }
 
@@ -204,10 +204,14 @@ export class TwitterPostClient {
 
             try {
                 const projects = await this.client.query(
-                    'SELECT * FROM projects WHERE "id" = 1'
+                    'SELECT * FROM projects WHERE "id" = 2'
                 );
                 let index = projects.rows[0].index;
                 const data = projects.rows[0].data;
+                if (index >= data.projects.length) {
+                    elizaLogger.log(`No data available`);
+                    return;
+                }
                 const longTextTweet = data.projects[index].Text;
                 const replyTo = data.projects[index].ReplyTo;
 
