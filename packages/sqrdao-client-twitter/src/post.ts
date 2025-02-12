@@ -262,7 +262,7 @@ export class TwitterPostClient {
 
                 index++;
                 await this.client.query(
-                    'UPDATE projects SET index = $1 WHERE "id" = 1',
+                    'UPDATE projects SET index = $1 WHERE "id" = 2',
                     [index]
                 );
 
