@@ -87,8 +87,8 @@ export class TwitterPostClient {
             const entities = await this.client.queryTwitterAccessToken(agentId);
 
             for (const entity of entities) {
-                // only sqrai_dev can post
-                if (entity.twitterId !== "1869310432823169024") {
+                // stop post
+                if (entity.twitterId !== "0000") {
                     continue;
                 }
 
